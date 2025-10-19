@@ -2,10 +2,12 @@
 from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
                              QMessageBox, QLineEdit, QLabel, QComboBox, 
                              QPushButton, QCheckBox, QTableWidget,
-                             QTableWidgetItem, QFrame)
+                             QTableWidgetItem, QFrame, QScrollArea, QTextEdit,
+                             QSplitter, QTabWidget)
 from PyQt5.QtCore import QTimer, Qt
 from PyQt5.QtGui import QFont, QColor
 from .components.price_chart import PriceChart
+from .components.sentiment_panel import SentimentPanel
 from ..services.crypto_data import CryptoDataService
 from ..services.technical_analysis import TechnicalAnalysisService
 from ..services.pattern_recognition import PatternRecognition
@@ -13,9 +15,9 @@ from ..services.pattern_recognition import PatternRecognition
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Crypto Analyzer - TradingView Style")
-        self.resize(1600, 1000)
-        self.setMinimumSize(1400, 900)
+        self.setWindowTitle("Crypto Analyzer - TradingView Style with 29+ Patterns & Sentiment")
+        self.resize(2000, 1200)
+        self.setMinimumSize(1600, 1000)
         self.setFont(QFont("Segoe UI", 10))
         
         # Dark theme
@@ -29,6 +31,11 @@ class MainWindow(QMainWindow):
             QCheckBox { color: #ffffff; }
             QTableWidget { background-color: #2d2d2d; gridline-color: #444; }
             QHeaderView::section { background-color: #1e1e1e; color: #ffffff; border: none; padding: 5px; }
+            QScrollArea { border: none; background-color: #2d2d2d; }
+            QTextEdit { background-color: #1e1e1e; color: #ffffff; border: 1px solid #444; padding: 8px; border-radius: 3px; font-family: 'Courier New'; font-size: 9px; }
+            QTabWidget::pane { border: 1px solid #444; }
+            QTabBar::tab { background-color: #2d2d2d; color: #ffffff; padding: 8px; }
+            QTabBar::tab:selected { background-color: #0d7377; }
         """)
         
         # Services
@@ -108,20 +115,63 @@ class MainWindow(QMainWindow):
         header_layout.addStretch()
         main_layout.addLayout(header_layout)
         
-        # ===== MAIN CONTENT =====
-        content_layout = QHBoxLayout()
-        content_layout.setSpacing(5)
+        # ===== MAIN CONTENT dengan Splitter =====
+        # Splitter untuk resize area chart vs sidebar
+        main_splitter = QSplitter(Qt.Horizontal)
+        main_splitter.setStyleSheet("QSplitter::handle { background: #444; }")
         
-        # Chart area (left - 80%)
+        # LEFT SIDE: Chart + Stats (60%)
+        left_widget = QWidget()
+        left_layout = QVBoxLayout(left_widget)
+        left_layout.setContentsMargins(0, 0, 0, 0)
+        left_layout.setSpacing(5)
+        
+        # Chart area
         self.price_chart = PriceChart()
-        content_layout.addWidget(self.price_chart, stretch=8)
+        left_layout.addWidget(self.price_chart, stretch=1)
         
-        # Right sidebar (20%)
-        sidebar = QFrame()
-        sidebar.setStyleSheet("background-color: #2d2d2d; border-radius: 5px;")
-        sidebar_layout = QVBoxLayout(sidebar)
-        sidebar_layout.setContentsMargins(10, 10, 10, 10)
-        sidebar_layout.setSpacing(8)
+        # Bottom panel - Statistics
+        stats_panel = self.create_stats_panel()
+        left_layout.addWidget(stats_panel, stretch=0)
+        
+        main_splitter.addWidget(left_widget)
+        
+        # RIGHT SIDE: Tab Widget dengan Sidebar + Sentiment (40%)
+        right_tabs = QTabWidget()
+        
+        # Tab 1: Technical Analysis Sidebar
+        self.tech_sidebar = self.create_technical_sidebar()
+        right_tabs.addTab(self.tech_sidebar, "📊 Technical")
+        
+        # Tab 2: Sentiment & News Panel
+        try:
+            self.sentiment_panel = SentimentPanel()
+            right_tabs.addTab(self.sentiment_panel, "📈 Sentiment & News")
+        except Exception as e:
+            print(f"Warning: Sentiment panel not loaded: {e}")
+            error_widget = QWidget()
+            error_layout = QVBoxLayout(error_widget)
+            error_label = QLabel(f"Sentiment panel error: {str(e)}\n\nMake sure all dependencies are installed:\npip install feedparser requests")
+            error_label.setStyleSheet("color: #f23645; padding: 10px;")
+            error_layout.addWidget(error_label)
+            error_layout.addStretch()
+            right_tabs.addTab(error_widget, "📈 Sentiment & News")
+        
+        main_splitter.addWidget(right_tabs)
+        
+        # Set splitter proportions (60% left, 40% right)
+        main_splitter.setSizes([1200, 800])
+        main_splitter.setCollapsible(0, False)
+        main_splitter.setCollapsible(1, True)
+        
+        main_layout.addWidget(main_splitter, stretch=1)
+
+    def create_technical_sidebar(self):
+        """Create technical analysis sidebar"""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(8)
         
         # Price info card
         self.price_info = QLabel("Price: --\nChange: --\nVolume: --")
@@ -129,11 +179,11 @@ class MainWindow(QMainWindow):
             color: #0d7377; font-weight: bold; font-size: 11px;
             background-color: #1e1e1e; padding: 8px; border-radius: 3px;
         """)
-        sidebar_layout.addWidget(QLabel("📊 Current Price"))
-        sidebar_layout.addWidget(self.price_info)
+        layout.addWidget(QLabel("📊 Current Price"))
+        layout.addWidget(self.price_info)
         
         # Indicator toggles
-        sidebar_layout.addWidget(QLabel("📈 Indicators"))
+        layout.addWidget(QLabel("📈 Indicators"))
         indicators_group = QWidget()
         indicators_layout = QVBoxLayout(indicators_group)
         indicators_layout.setContentsMargins(0, 0, 0, 0)
@@ -151,29 +201,46 @@ class MainWindow(QMainWindow):
             cb.stateChanged.connect(self.update_chart_display)
             indicators_layout.addWidget(cb)
         
-        sidebar_layout.addWidget(indicators_group)
+        layout.addWidget(indicators_group)
         
-        # Pattern detection
-        sidebar_layout.addWidget(QLabel("⚡ Detected Patterns"))
+        # Pattern detection - dengan scroll area
+        pattern_header = QHBoxLayout()
+        pattern_header.addWidget(QLabel("⚡ Detected Patterns"))
+        self.pattern_count_label = QLabel("(0)")
+        self.pattern_count_label.setStyleSheet("color: #ffd700; font-weight: bold;")
+        pattern_header.addWidget(self.pattern_count_label)
+        pattern_header.addStretch()
+        layout.addLayout(pattern_header)
+        
+        # Scroll area untuk pattern list
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setMaximumHeight(200)
+        
         self.pattern_list = QTableWidget()
         self.pattern_list.setColumnCount(2)
         self.pattern_list.setHorizontalHeaderLabels(["Pattern", "Count"])
-        self.pattern_list.setColumnWidth(0, 100)
-        self.pattern_list.setColumnWidth(1, 50)
-        self.pattern_list.setMaximumHeight(140)
+        self.pattern_list.setColumnWidth(0, 250)
+        self.pattern_list.setColumnWidth(1, 60)
         self.pattern_list.setStyleSheet("""
-            QTableWidget { gridline-color: #444; }
+            QTableWidget { gridline-color: #444; border: none; }
         """)
-        sidebar_layout.addWidget(self.pattern_list)
+        self.pattern_list.cellClicked.connect(self.show_pattern_details)
         
-        sidebar_layout.addStretch()
+        scroll_area.setWidget(self.pattern_list)
+        layout.addWidget(scroll_area)
         
-        content_layout.addWidget(sidebar, stretch=2)
-        main_layout.addLayout(content_layout, stretch=1)
+        # Pattern Details Area
+        layout.addWidget(QLabel("📋 Pattern Details (Click pattern above)"))
+        self.pattern_details = QTextEdit()
+        self.pattern_details.setReadOnly(True)
+        self.pattern_details.setMaximumHeight(150)
+        self.pattern_details.setText("Click pada pattern di tabel untuk melihat detail...")
+        layout.addWidget(self.pattern_details)
         
-        # ===== BOTTOM PANEL - STATISTICS =====
-        stats_panel = self.create_stats_panel()
-        main_layout.addWidget(stats_panel, stretch=0)
+        layout.addStretch()
+        
+        return widget
 
     def create_stats_panel(self):
         panel = QFrame()
@@ -197,6 +264,107 @@ class MainWindow(QMainWindow):
         
         layout.addWidget(self.stats_table)
         return panel
+
+    def show_pattern_details(self, row, column):
+        """Show detailed information about selected pattern"""
+        if not self.patterns or self.df is None:
+            return
+        
+        pattern_name = self.pattern_list.item(row, 0).text()
+        
+        if pattern_name not in self.patterns:
+            return
+        
+        detections = self.patterns[pattern_name]
+        
+        if not detections:
+            self.pattern_details.setText("No details available.")
+            return
+        
+        # Build detailed info
+        details = f"═══ {pattern_name} ═══\n\n"
+        details += f"Total Detected: {len(detections) if isinstance(detections, list) else 1}\n"
+        details += "─" * 40 + "\n\n"
+        
+        # Get pattern interpretation
+        interpretation = self.get_pattern_interpretation(pattern_name)
+        details += f"📊 INTERPRETATION:\n{interpretation}\n\n"
+        details += "─" * 40 + "\n\n"
+        
+        # Show individual detections
+        if isinstance(detections, list) and len(detections) > 0:
+            details += "🔍 DETECTED INSTANCES:\n\n"
+            
+            for i, detection in enumerate(detections[:5]):  # Show max 5
+                details += f"Instance #{i+1}:\n"
+                
+                if isinstance(detection, dict):
+                    for key, value in detection.items():
+                        if key == 'index' or 'idx' in str(key).lower():
+                            if value < len(self.df):
+                                timestamp = self.df.index[value].strftime('%Y-%m-%d %H:%M')
+                                details += f"  • Position: {timestamp} (index: {value})\n"
+                        elif 'price' in str(key).lower():
+                            details += f"  • {key}: ${value:,.2f}\n"
+                        elif isinstance(value, (int, float)):
+                            if isinstance(value, float):
+                                details += f"  • {key}: {value:.4f}\n"
+                            else:
+                                details += f"  • {key}: {value}\n"
+                        else:
+                            details += f"  • {key}: {value}\n"
+                else:
+                    details += f"  • Detection: {detection}\n"
+                
+                details += "\n"
+            
+            if len(detections) > 5:
+                details += f"... and {len(detections) - 5} more\n"
+        
+        self.pattern_details.setText(details)
+
+    def get_pattern_interpretation(self, pattern_name):
+        """Get interpretation/meaning of each pattern"""
+        interpretations = {
+            # Bullish Patterns
+            'Double Bottoms': '🟢 BULLISH - Sinyal reversal naik. Harga mencoba turun 2x di level yang sama lalu berbalik naik.',
+            'Triple Bottoms': '🟢 BULLISH - Reversal kuat. 3 kali harga test support dan gagal tembus.',
+            'Inverse Head & Shoulders': '🟢 BULLISH - Pattern reversal klasik. Left shoulder - head - right shoulder membentuk W.',
+            'Rounding Bottom': '🟢 BULLISH - Akumulasi bertahap. Harga membentuk U shape sebelum naik.',
+            'Cup & Handle': '🟢 BULLISH - Continuation pattern. Setelah cup, handle adalah pullback kecil sebelum breakout.',
+            'Bullish Flag': '🟢 BULLISH - Short-term continuation. Setelah rally kuat, konsolidasi kecil lalu lanjut naik.',
+            'Bullish Engulfing': '🟢 BULLISH - Candle bullish "menelan" candle bearish sebelumnya. Sinyal pembalikan.',
+            'Morning Star': '🟢 BULLISH - 3-candle reversal. Bearish → Small body → Bullish besar.',
+            'Hammer': '🟢 BULLISH - Long lower shadow. Pembeli reject penurunan harga.',
+            'Piercing Pattern': '🟢 BULLISH - Candle bullish menembus 50% body candle bearish sebelumnya.',
+            'Three White Soldiers': '🟢 BULLISH - 3 candle bullish berturut-turut. Momentum kuat.',
+            'Bullish Harami': '🟢 BULLISH - Small bullish inside large bearish. Sinyal pembalikan.',
+            
+            # Bearish Patterns
+            'Double Tops': '🔴 BEARISH - Sinyal reversal turun. Harga mencoba naik 2x di level yang sama lalu berbalik turun.',
+            'Triple Tops': '🔴 BEARISH - Reversal kuat. 3 kali harga test resistance dan gagal tembus.',
+            'Head & Shoulders': '🔴 BEARISH - Pattern reversal klasik. Left shoulder - head - right shoulder membentuk M.',
+            'Dead Cat Bounce': '🔴 BEARISH - Rally lemah setelah penurunan tajam. Harga lanjut turun.',
+            'Bearish Flag': '🔴 BEARISH - Continuation pattern. Setelah drop tajam, konsolidasi kecil lalu lanjut turun.',
+            'Bearish Engulfing': '🔴 BEARISH - Candle bearish "menelan" candle bullish sebelumnya.',
+            'Evening Star': '🔴 BEARISH - 3-candle reversal. Bullish → Small body → Bearish besar.',
+            'Shooting Star': '🔴 BEARISH - Long upper shadow. Penjual reject kenaikan harga.',
+            'Dark Cloud': '🔴 BEARISH - Candle bearish menembus 50% body candle bullish sebelumnya.',
+            'Three Black Crows': '🔴 BEARISH - 3 candle bearish berturut-turut. Momentum turun kuat.',
+            
+            # Triangles
+            'Ascending Triangle': '🟢 BULLISH - Resistance datar, support naik. Biasanya breakout keatas.',
+            'Descending Triangle': '🔴 BEARISH - Support datar, resistance turun. Biasanya breakdown.',
+            'Symmetric Triangle': '🟡 NEUTRAL - Converging pattern. Breakout menentukan arah.',
+            
+            # Default
+        }
+        
+        for key in interpretations:
+            if key.lower() in pattern_name.lower() or pattern_name.lower() in key.lower():
+                return interpretations[key]
+        
+        return '🔵 Pattern terdeteksi. Analisa lebih lanjut diperlukan untuk interpretasi.'
 
     def on_search_pair(self):
         """Triggered by Enter key in search box"""
@@ -247,27 +415,21 @@ class MainWindow(QMainWindow):
             if not symbol or not interval:
                 return
             
-            # Fetch hanya last 2 candles untuk compare
             df_latest = self.crypto_service.get_klines_data(symbol, interval, limit=2)
             
             if df_latest is None or df_latest.empty or len(df_latest) < 1:
                 return
             
-            # Get latest candle data
             latest_row = df_latest.iloc[-1]
-            current_row = self.df.iloc[-1]
             
-            # Update last row dengan data terbaru
             self.df.iloc[-1, self.df.columns.get_loc('open')] = latest_row['open']
             self.df.iloc[-1, self.df.columns.get_loc('high')] = latest_row['high']
             self.df.iloc[-1, self.df.columns.get_loc('low')] = latest_row['low']
             self.df.iloc[-1, self.df.columns.get_loc('close')] = latest_row['close']
             self.df.iloc[-1, self.df.columns.get_loc('volume')] = latest_row['volume']
             
-            # Recalculate last row indicators
             self.df = self.technical_service.calculate_all_indicators(self.df)
             
-            # Update UI
             self.update_price_info()
             self.update_stats_table()
             self.update_chart_display()
@@ -286,29 +448,27 @@ class MainWindow(QMainWindow):
             self.current_symbol = symbol
             self.current_interval = interval
             
-            # Fetch data
             self.df = self.crypto_service.get_klines_data(symbol, interval)
             
             if self.df is None or self.df.empty:
                 raise ValueError(f"Data kosong untuk {symbol} {interval}")
             
-            # Calculate indicators
             self.df = self.technical_service.calculate_all_indicators(self.df)
             
-            # Pattern recognition
             self.pattern_recognition = PatternRecognition(self.df)
-            self.patterns = {
-                'Double Tops': self.pattern_recognition.find_double_top(),
-                'Double Bottoms': self.pattern_recognition.find_double_bottom(),
-                'Head & Shoulders': self.pattern_recognition.find_head_and_shoulders(),
-                'Triangles': self.pattern_recognition.find_triangle_patterns(),
-                'Hammers': self.pattern_recognition.find_hammer_patterns()
-            }
+            self.patterns = self.pattern_recognition.detect_all_patterns()
             
             self.update_price_info()
             self.update_pattern_list()
             self.update_stats_table()
             self.update_chart_display()
+            
+            # Update sentiment panel jika ada
+            if hasattr(self, 'sentiment_panel'):
+                try:
+                    self.sentiment_panel.update_coin_sentiment(symbol)
+                except:
+                    pass
             
         except Exception as e:
             print(f"Error: {str(e)}")
@@ -337,22 +497,44 @@ class MainWindow(QMainWindow):
         self.pattern_list.setRowCount(0)
         
         if not self.patterns:
+            self.pattern_count_label.setText("(0)")
             return
         
         row = 0
-        for pattern_name, detections in self.patterns.items():
+        total_count = 0
+        
+        sorted_patterns = sorted(self.patterns.items(), 
+                                key=lambda x: len(x[1]) if isinstance(x[1], list) else (1 if x[1] else 0), 
+                                reverse=True)
+        
+        for pattern_name, detections in sorted_patterns:
             if detections:
                 count = len(detections) if isinstance(detections, list) else (1 if detections else 0)
                 if count > 0:
+                    total_count += count
+                    
                     item_name = QTableWidgetItem(pattern_name)
                     item_count = QTableWidgetItem(str(count))
-                    item_count.setForeground(QColor("#26a69a"))
+                    
+                    if any(x in pattern_name.lower() for x in ['bullish', 'bottom', 'morning', 'white', 'hammer', 'piercing', 'inverse', 'ascending']):
+                        item_count.setForeground(QColor("#26a69a"))
+                        item_name.setForeground(QColor("#26a69a"))
+                    elif any(x in pattern_name.lower() for x in ['bearish', 'top', 'evening', 'black', 'shooting', 'dark', 'dead', 'descending']):
+                        item_count.setForeground(QColor("#f23645"))
+                        item_name.setForeground(QColor("#f23645"))
+                    else:
+                        item_count.setForeground(QColor("#ffd700"))
+                        item_name.setForeground(QColor("#ffd700"))
+                    
                     item_count.setFont(QFont("Arial", 10, QFont.Bold))
                     
                     self.pattern_list.insertRow(row)
                     self.pattern_list.setItem(row, 0, item_name)
                     self.pattern_list.setItem(row, 1, item_count)
                     row += 1
+        
+        self.pattern_count_label.setText(f"({total_count})")
+        self.setWindowTitle(f"Crypto Analyzer - {total_count} Patterns Detected")
 
     def update_stats_table(self):
         if self.df is None or self.df.empty:
