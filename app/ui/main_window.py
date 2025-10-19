@@ -1,3 +1,4 @@
+# app/ui/main_window.py
 from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
                              QMessageBox, QLineEdit, QLabel, QComboBox, 
                              QPushButton, QCheckBox, QTableWidget,
@@ -46,10 +47,15 @@ class MainWindow(QMainWindow):
         # Setup UI
         self.setup_ui()
         
-        # Auto-update timer
-        self.timer = QTimer()
-        self.timer.timeout.connect(self.auto_update)
-        self.timer.start(60000)  # Update setiap 1 menit
+        # Auto-update timer untuk price
+        self.price_timer = QTimer()
+        self.price_timer.timeout.connect(self.quick_update_price)
+        self.price_timer.start(1000)  # Update harga setiap 1 detik
+        
+        # Auto-update timer untuk full data
+        self.full_timer = QTimer()
+        self.full_timer.timeout.connect(self.auto_update)
+        self.full_timer.start(60000)  # Update full data setiap 1 menit
         
         # Initial load
         self.load_initial_data()
@@ -228,6 +234,46 @@ class MainWindow(QMainWindow):
         """Auto update data setiap 1 menit"""
         if self.current_symbol and self.current_interval:
             self.update_data()
+
+    def quick_update_price(self):
+        """Update harga saja setiap 1 detik (lebih ringan)"""
+        try:
+            if self.df is None or self.df.empty:
+                return
+            
+            symbol = self.pair_combo.currentText()
+            interval = self.timeframe_combo.currentText()
+            
+            if not symbol or not interval:
+                return
+            
+            # Fetch hanya last 2 candles untuk compare
+            df_latest = self.crypto_service.get_klines_data(symbol, interval, limit=2)
+            
+            if df_latest is None or df_latest.empty or len(df_latest) < 1:
+                return
+            
+            # Get latest candle data
+            latest_row = df_latest.iloc[-1]
+            current_row = self.df.iloc[-1]
+            
+            # Update last row dengan data terbaru
+            self.df.iloc[-1, self.df.columns.get_loc('open')] = latest_row['open']
+            self.df.iloc[-1, self.df.columns.get_loc('high')] = latest_row['high']
+            self.df.iloc[-1, self.df.columns.get_loc('low')] = latest_row['low']
+            self.df.iloc[-1, self.df.columns.get_loc('close')] = latest_row['close']
+            self.df.iloc[-1, self.df.columns.get_loc('volume')] = latest_row['volume']
+            
+            # Recalculate last row indicators
+            self.df = self.technical_service.calculate_all_indicators(self.df)
+            
+            # Update UI
+            self.update_price_info()
+            self.update_stats_table()
+            self.update_chart_display()
+        
+        except Exception as e:
+            print(f"Quick update error: {e}")
 
     def update_data(self):
         try:
