@@ -1,0 +1,11 @@
+PyQt5
+pandas
+numpy
+requests
+python-binance
+ta
+matplotlib
+mplfinance
+scikit-learn
+nltk
+newsapi-python
