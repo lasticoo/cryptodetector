@@ -2,22 +2,23 @@
 import requests
 import json
 from datetime import datetime, timedelta
-import pandas as pd
 from typing import Dict, List, Optional
 import time
 
 class SentimentAnalysisService:
-    """Service untuk analisa sentimen crypto dari berbagai sumber"""
+    """Service untuk analisa sentimen crypto dari berbagai sumber (ditingkatkan, tetap kompatibel)"""
     
     def __init__(self):
         self.base_urls = {
             'coingecko': 'https://api.coingecko.com/api/v3',
             'alternative': 'https://api.alternative.me',
+            # disiapkan bila ingin pakai source tambahan lain
             'cryptopanic': 'https://cryptopanic.com/api/v1',
         }
         self.cache = {}
         self.cache_duration = 300  # 5 menit
         
+    # ------------ cache helpers ------------
     def _get_cache(self, key):
         """Get cached data if still valid"""
         if key in self.cache:
@@ -30,6 +31,7 @@ class SentimentAnalysisService:
         """Set cache data"""
         self.cache[key] = (data, time.time())
     
+    # ------------ FEAR & GREED ------------
     def get_fear_greed_index(self) -> Dict:
         """
         Get Crypto Fear & Greed Index
@@ -51,11 +53,12 @@ class SentimentAnalysisService:
                 data = response.json()
                 if 'data' in data and len(data['data']) > 0:
                     fng_data = data['data'][0]
+                    value_int = int(fng_data['value'])
                     result = {
-                        'value': int(fng_data['value']),
-                        'classification': fng_data['value_classification'],
-                        'timestamp': fng_data['timestamp'],
-                        'interpretation': self._interpret_fear_greed(int(fng_data['value']))
+                        'value': value_int,
+                        'classification': fng_data.get('value_classification', 'Neutral'),
+                        'timestamp': fng_data.get('timestamp'),
+                        'interpretation': self._interpret_fear_greed(value_int)
                     }
                     self._set_cache(cache_key, result)
                     return result
@@ -75,9 +78,10 @@ class SentimentAnalysisService:
         else:
             return "🔴 EXTREME GREED - Euforia tinggi. Risiko koreksi besar, consider take profit."
     
+    # ------------ COIN SENTIMENT (CoinGecko) ------------
     def get_coin_sentiment(self, coin_id: str) -> Dict:
         """
-        Get sentiment data for specific coin from CoinGecko
+        Get sentiment data untuk coin dari CoinGecko
         coin_id: bitcoin, ethereum, binancecoin, dll
         """
         cache_key = f'sentiment_{coin_id}'
@@ -96,41 +100,40 @@ class SentimentAnalysisService:
             }
             
             response = requests.get(url, params=params, timeout=15)
-            
             if response.status_code == 200:
                 data = response.json()
                 
                 # Extract sentiment data
                 sentiment = {
                     'name': data.get('name', 'Unknown'),
-                    'symbol': data.get('symbol', '').upper(),
-                    'sentiment_votes_up_percentage': data.get('sentiment_votes_up_percentage', 0),
-                    'sentiment_votes_down_percentage': data.get('sentiment_votes_down_percentage', 0),
+                    'symbol': (data.get('symbol') or '').upper(),
+                    'sentiment_votes_up_percentage': data.get('sentiment_votes_up_percentage', 0) or 0,
+                    'sentiment_votes_down_percentage': data.get('sentiment_votes_down_percentage', 0) or 0,
                     'market_cap_rank': data.get('market_cap_rank', 'N/A'),
-                    'coingecko_score': data.get('coingecko_score', 0),
-                    'developer_score': data.get('developer_score', 0),
-                    'community_score': data.get('community_score', 0),
-                    'liquidity_score': data.get('liquidity_score', 0),
-                    'public_interest_score': data.get('public_interest_score', 0)
+                    'coingecko_score': data.get('coingecko_score', 0) or 0,
+                    'developer_score': data.get('developer_score', 0) or 0,
+                    'community_score': data.get('community_score', 0) or 0,
+                    'liquidity_score': data.get('liquidity_score', 0) or 0,
+                    'public_interest_score': data.get('public_interest_score', 0) or 0
                 }
                 
                 # Market data
-                if 'market_data' in data:
-                    md = data['market_data']
-                    sentiment['price_change_24h_pct'] = md.get('price_change_percentage_24h', 0)
-                    sentiment['price_change_7d_pct'] = md.get('price_change_percentage_7d', 0)
-                    sentiment['price_change_30d_pct'] = md.get('price_change_percentage_30d', 0)
-                    sentiment['market_cap'] = md.get('market_cap', {}).get('usd', 0)
-                    sentiment['total_volume'] = md.get('total_volume', {}).get('usd', 0)
-                    sentiment['ath_change_percentage'] = md.get('ath_change_percentage', {}).get('usd', 0)
+                md = data.get('market_data', {})
+                if md:
+                    sentiment['price_change_24h_pct'] = md.get('price_change_percentage_24h', 0) or 0
+                    sentiment['price_change_7d_pct'] = md.get('price_change_percentage_7d', 0) or 0
+                    sentiment['price_change_30d_pct'] = md.get('price_change_percentage_30d', 0) or 0
+                    sentiment['market_cap'] = md.get('market_cap', {}).get('usd', 0) or 0
+                    sentiment['total_volume'] = md.get('total_volume', {}).get('usd', 0) or 0
+                    sentiment['ath_change_percentage'] = md.get('ath_change_percentage', {}).get('usd', 0) or 0
                 
                 # Community data
-                if 'community_data' in data:
-                    cd = data['community_data']
-                    sentiment['twitter_followers'] = cd.get('twitter_followers', 0)
-                    sentiment['reddit_subscribers'] = cd.get('reddit_subscribers', 0)
+                cd = data.get('community_data', {})
+                if cd:
+                    sentiment['twitter_followers'] = cd.get('twitter_followers', 0) or 0
+                    sentiment['reddit_subscribers'] = cd.get('reddit_subscribers', 0) or 0
                 
-                # Calculate overall sentiment
+                # Calculate overall sentiment (versi lama dipertahankan)
                 sentiment['overall_sentiment'] = self._calculate_overall_sentiment(sentiment)
                 
                 self._set_cache(cache_key, sentiment)
@@ -142,7 +145,7 @@ class SentimentAnalysisService:
         return {'name': coin_id, 'error': 'Data not available'}
     
     def _calculate_overall_sentiment(self, data: Dict) -> Dict:
-        """Calculate overall sentiment score"""
+        """Calculate overall sentiment score (skala sekitar -5..+5 -> kami pakai integer)"""
         score = 0
         reasons = []
         
@@ -174,7 +177,7 @@ class SentimentAnalysisService:
             score -= 1
             reasons.append("Trend 7d bearish")
         
-        # Scores
+        # Scores rata-rata
         avg_score = (
             data.get('developer_score', 0) +
             data.get('community_score', 0) +
@@ -204,7 +207,46 @@ class SentimentAnalysisService:
             'classification': classification,
             'reasons': reasons
         }
+
+    # ------------ Composite Score 0–100 (baru) ------------
+    def compute_composite_score(self, coin_sentiment: Dict, fng: Dict, news_sentiment: Dict) -> Dict:
+        """
+        Gabungkan beberapa sinyal menjadi skor 0–100:
+        - 40%: coin_sentiment (normalisasi dari skor -∞..∞ -> 0..100)
+        - 30%: news_sentiment score (0..100)
+        - 30%: Fear&Greed dibalik (fear tinggi => peluang) => 100 - FNG
+        """
+        # coin score: map score (-5..+5 kira-kira) ke 0..100
+        cscore_raw = coin_sentiment.get('overall_sentiment', {}).get('score', 0)
+        cscore = max(0, min(100, 50 + cscore_raw * 10))  # -5->0, 0->50, +5->100
+
+        nscore = max(0, min(100, news_sentiment.get('score', 50)))
+        fng_val = fng.get('value', 50)
+        fng_adj = 100 - fng_val  # fear besar -> nilai rendah -> peluang -> dibalik
+
+        composite = int(round(0.40 * cscore + 0.30 * nscore + 0.30 * fng_adj))
+        if composite >= 70:
+            label = "STRONG BULLISH"
+        elif composite >= 60:
+            label = "BULLISH"
+        elif composite >= 45:
+            label = "NEUTRAL"
+        elif composite >= 35:
+            label = "BEARISH"
+        else:
+            label = "STRONG BEARISH"
+
+        return {
+            'score': composite,
+            'label': label,
+            'components': {
+                'coin': cscore,
+                'news': nscore,
+                'fear_greed_inverted': fng_adj
+            }
+        }
     
+    # ------------ Trending & Global Stats ------------
     def get_trending_coins(self) -> List[Dict]:
         """Get trending coins on CoinGecko"""
         cache_key = 'trending'
@@ -215,11 +257,9 @@ class SentimentAnalysisService:
         try:
             url = f"{self.base_urls['coingecko']}/search/trending"
             response = requests.get(url, timeout=10)
-            
             if response.status_code == 200:
                 data = response.json()
                 trending = []
-                
                 if 'coins' in data:
                     for item in data['coins'][:10]:  # Top 10
                         coin = item.get('item', {})
@@ -230,7 +270,6 @@ class SentimentAnalysisService:
                             'price_btc': coin.get('price_btc', 0),
                             'score': coin.get('score', 0)
                         })
-                
                 self._set_cache(cache_key, trending)
                 return trending
         except Exception as e:
@@ -248,10 +287,8 @@ class SentimentAnalysisService:
         try:
             url = f"{self.base_urls['coingecko']}/global"
             response = requests.get(url, timeout=10)
-            
             if response.status_code == 200:
                 data = response.json().get('data', {})
-                
                 stats = {
                     'total_market_cap_usd': data.get('total_market_cap', {}).get('usd', 0),
                     'total_volume_24h_usd': data.get('total_volume', {}).get('usd', 0),
@@ -260,9 +297,8 @@ class SentimentAnalysisService:
                     'active_cryptocurrencies': data.get('active_cryptocurrencies', 0),
                     'markets': data.get('markets', 0),
                     'market_cap_change_24h_pct': data.get('market_cap_change_percentage_24h_usd', 0),
-                    'updated_at': datetime.fromtimestamp(data.get('updated_at', 0)).strftime('%Y-%m-%d %H:%M:%S')
+                    'updated_at': datetime.fromtimestamp(data.get('updated_at', 0) or time.time()).strftime('%Y-%m-%d %H:%M:%S')
                 }
-                
                 # Interpretation
                 btc_dom = stats['bitcoin_dominance']
                 if btc_dom > 50:
@@ -279,12 +315,11 @@ class SentimentAnalysisService:
         
         return {}
     
+    # ------------ Utilities ------------
     def convert_symbol_to_coingecko_id(self, symbol: str) -> str:
         """Convert trading symbol to CoinGecko ID"""
         # Remove /USDT, /BUSD, etc.
         clean_symbol = symbol.split('/')[0].lower()
-        
-        # Common mappings
         mapping = {
             'btc': 'bitcoin',
             'eth': 'ethereum',
@@ -313,13 +348,12 @@ class SentimentAnalysisService:
             'aave': 'aave',
             'snx': 'synthetix-network-token'
         }
-        
         return mapping.get(clean_symbol, clean_symbol)
     
+    # ------------ Bundled outputs ------------
     def get_comprehensive_analysis(self, symbol: str) -> Dict:
         """Get comprehensive sentiment analysis for a coin"""
         coin_id = self.convert_symbol_to_coingecko_id(symbol)
-        
         analysis = {
             'symbol': symbol,
             'coin_id': coin_id,
@@ -329,7 +363,6 @@ class SentimentAnalysisService:
             'global_stats': self.get_global_crypto_stats(),
             'trending_coins': self.get_trending_coins()
         }
-        
         return analysis
     
     def get_market_summary(self) -> str:
@@ -337,7 +370,6 @@ class SentimentAnalysisService:
         try:
             fng = self.get_fear_greed_index()
             stats = self.get_global_crypto_stats()
-            
             summary = f"""
 📊 MARKET SUMMARY - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 {'='*60}
