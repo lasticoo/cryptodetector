@@ -166,7 +166,8 @@ class PatternRecognition:
                     triangles.append({
                         'index': i,
                         'type': 'symmetric_triangle',
-                        'high_slope': high_slope,
+                        'high_slope': high_slope
+                        ,
                         'low_slope': low_slope
                     })
             except:
@@ -536,7 +537,7 @@ class PatternRecognition:
                 segment = self.df.iloc[i-window:i]
                 highs = segment['high'].values
                 lows = segment['low'].values
-                
+                                
                 x = np.arange(len(highs))
                 high_slope = np.polyfit(x, highs, 1)[0]
                 low_slope = np.polyfit(x, lows, 1)[0]
@@ -678,7 +679,7 @@ class PatternRecognition:
                 after1 = self.df['low'].iloc[idx1+1:idx1+window1+1]
                 
                 sharp1 = len(before1) > 0 and len(after1) > 0
-                
+                                
                 # Check if second bottom is rounded (U-shaped)
                 window2 = 5
                 bottom2_segment = self.df['low'].iloc[max(0, idx2-window2):idx2+window2+1]
@@ -918,7 +919,7 @@ class PatternRecognition:
                 
                 # Third closes well into first
                 recovery = third['close'] > (first['open'] + first['close']) / 2
-                
+                                
                 if first_bearish and second_small and third_bullish and third_large and recovery:
                     patterns.append({
                         'index': i,
@@ -956,7 +957,7 @@ class PatternRecognition:
                 
                 # Third closes well into first
                 decline = third['close'] < (first['open'] + first['close']) / 2
-                
+                                
                 if first_bullish and second_small and third_bearish and third_large and decline:
                     patterns.append({
                         'index': i,
@@ -1290,3 +1291,203 @@ class PatternRecognition:
         results['Harami'] = self.find_harami_patterns()
         
         return results
+    # TAMBAHAN UNTUK pattern_recognition.py
+# Tambahkan method ini di akhir class PatternRecognition (setelah detect_all_patterns)
+
+    def get_recent_patterns(self, days=3):
+        """
+        Filter patterns yang terjadi dalam N hari terakhir
+        Berguna untuk melihat pola yang baru terbentuk
+        
+        Args:
+            days: Jumlah hari ke belakang (default 3)
+        
+        Returns:
+            Dict dengan pola yang terjadi dalam periode tersebut
+        """
+        if self.df is None or self.df.empty:
+            return {}
+        
+        # Calculate lookback period based on timeframe
+        total_candles = len(self.df)
+        
+        # Estimate candles per day based on data
+        try:
+            time_diff = self.df.index[-1] - self.df.index[-2]
+            minutes_per_candle = time_diff.total_seconds() / 60
+            candles_per_day = int((24 * 60) / minutes_per_candle)
+        except:
+            # Default fallback
+            candles_per_day = 24  # Assume 1h timeframe
+        
+        # Calculate lookback window
+        lookback_candles = candles_per_day * days
+        cutoff_index = max(0, total_candles - lookback_candles)
+        
+        # Get all patterns
+        all_patterns = self.detect_all_patterns()
+        
+        # Filter patterns yang indexnya >= cutoff_index
+        recent_patterns = {}
+        
+        for pattern_name, detections in all_patterns.items():
+            if not detections:
+                continue
+            
+            recent_detections = []
+            
+            for detection in detections:
+                if isinstance(detection, dict):
+                    # Check berbagai kemungkinan key untuk index
+                    idx = None
+                    
+                    # Priority order untuk mencari index
+                    index_keys = ['index', 'second_top', 'second_bottom', 'right_shoulder', 
+                                 'head', 'D', 'handle_end', 'eve', 'peaks', 'troughs']
+                    
+                    for key in index_keys:
+                        if key in detection:
+                            value = detection[key]
+                            
+                            # Handle list (peaks, troughs)
+                            if isinstance(value, list) and len(value) > 0:
+                                idx = max(value)  # Ambil index terbesar
+                                break
+                            # Handle single value
+                            elif isinstance(value, (int, np.integer)):
+                                idx = int(value)
+                                break
+                    
+                    # Jika index ditemukan dan masuk dalam recent period
+                    if idx is not None and idx >= cutoff_index:
+                        recent_detections.append(detection)
+                
+                else:
+                    # Jika detection bukan dict, skip
+                    continue
+            
+            # Simpan jika ada deteksi recent
+            if recent_detections:
+                recent_patterns[pattern_name] = recent_detections
+        
+        return recent_patterns
+    
+    def get_pattern_timeline_info(self, days=3):
+        """
+        Get informasi timeline untuk recent patterns
+        Menampilkan kapan pattern terjadi dengan detail waktu
+        
+        Returns:
+            List of dict dengan info pattern + timestamp
+        """
+        recent_patterns = self.get_recent_patterns(days)
+        
+        timeline_info = []
+        
+        for pattern_name, detections in recent_patterns.items():
+            for detection in detections:
+                idx = None
+                
+                # Extract index
+                if 'index' in detection:
+                    idx = detection['index']
+                elif 'second_top' in detection:
+                    idx = detection['second_top']
+                elif 'second_bottom' in detection:
+                    idx = detection['second_bottom']
+                elif 'right_shoulder' in detection:
+                    idx = detection['right_shoulder']
+                elif 'peaks' in detection and isinstance(detection['peaks'], list):
+                    idx = max(detection['peaks'])
+                elif 'troughs' in detection and isinstance(detection['troughs'], list):
+                    idx = max(detection['troughs'])
+                
+                if idx is not None and idx < len(self.df):
+                    timestamp = self.df.index[idx]
+                    
+                    # Calculate time ago
+                    now = self.df.index[-1]
+                    time_diff = now - timestamp
+                    hours_ago = time_diff.total_seconds() / 3600
+                    
+                    if hours_ago < 1:
+                        time_ago_str = f"{int(time_diff.total_seconds() / 60)} menit lalu"
+                    elif hours_ago < 24:
+                        time_ago_str = f"{int(hours_ago)} jam lalu"
+                    else:
+                        days_ago = int(hours_ago / 24)
+                        time_ago_str = f"{days_ago} hari lalu"
+                    
+                    timeline_info.append({
+                        'pattern_name': pattern_name,
+                        'timestamp': timestamp,
+                        'time_ago': time_ago_str,
+                        'index': idx,
+                        'detection': detection
+                    })
+        
+        # Sort by timestamp (newest first)
+        timeline_info.sort(key=lambda x: x['timestamp'], reverse=True)
+        
+        return timeline_info
+    
+    def get_recent_patterns_summary(self, days=3):
+        """
+        Get summary text untuk recent patterns
+        Format yang mudah dibaca untuk UI
+        """
+        recent = self.get_recent_patterns(days)
+        timeline = self.get_pattern_timeline_info(days)
+        
+        if not recent:
+            return f"Tidak ada pattern baru dalam {days} hari terakhir."
+        
+        total_recent = sum(len(v) for v in recent.values())
+        
+        summary = f"📍 RECENT PATTERNS ({days} Hari Terakhir)\n"
+        summary += f"Total: {total_recent} pattern terdeteksi\n"
+        summary += "=" * 50 + "\n\n"
+        
+        # Group by pattern type
+        bullish_count = 0
+        bearish_count = 0
+        neutral_count = 0
+        
+        for pattern_name in recent.keys():
+            pn_lower = pattern_name.lower()
+            if any(x in pn_lower for x in ['bullish', 'bottom', 'morning', 'hammer', 'inverse']):
+                bullish_count += len(recent[pattern_name])
+            elif any(x in pn_lower for x in ['bearish', 'top', 'evening', 'shooting', 'dead']):
+                bearish_count += len(recent[pattern_name])
+            else:
+                neutral_count += len(recent[pattern_name])
+        
+        summary += f"🟢 Bullish Signals: {bullish_count}\n"
+        summary += f"🔴 Bearish Signals: {bearish_count}\n"
+        summary += f"🟡 Neutral Signals: {neutral_count}\n\n"
+        summary += "=" * 50 + "\n\n"
+        
+        # Timeline
+        summary += "📅 TIMELINE (Terbaru ke Terlama):\n\n"
+        
+        for i, info in enumerate(timeline[:10], 1):  # Show max 10
+            pattern_name = info['pattern_name']
+            time_ago = info['time_ago']
+            timestamp = info['timestamp'].strftime('%Y-%m-%d %H:%M')
+            
+            # Emoji based on pattern type
+            pn_lower = pattern_name.lower()
+            if any(x in pn_lower for x in ['bullish', 'bottom', 'morning', 'hammer']):
+                emoji = "🟢"
+            elif any(x in pn_lower for x in ['bearish', 'top', 'evening', 'shooting']):
+                emoji = "🔴"
+            else:
+                emoji = "🟡"
+            
+            summary += f"[{i}] {emoji} {pattern_name}\n"
+            summary += f"    ⏰ {time_ago} ({timestamp})\n\n"
+        
+        if len(timeline) > 10:
+            summary += f"... dan {len(timeline) - 10} pattern lainnya\n"
+        
+        return summary

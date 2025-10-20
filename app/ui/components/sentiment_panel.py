@@ -1,4 +1,4 @@
-# app/ui/components/sentiment_panel.py
+# app/ui/components/sentiment_panel.py - FONT DIPERBESAR
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
                              QPushButton, QTextEdit, QTabWidget, QScrollArea,
                              QFrame, QProgressBar)
@@ -35,7 +35,8 @@ class SentimentPanel(QWidget):
         # Header
         header = QHBoxLayout()
         title = QLabel("📊 SENTIMENT & NEWS ANALYSIS")
-        title.setFont(QFont("Arial", 12, QFont.Bold))
+        title_font = QFont("Arial", 13, QFont.Bold)
+        title.setFont(title_font)
         title.setStyleSheet("color: #0d7377;")
         header.addWidget(title)
         
@@ -47,7 +48,7 @@ class SentimentPanel(QWidget):
         
         # Last update label
         self.last_update_label = QLabel("Last update: Never")
-        self.last_update_label.setStyleSheet("color: #888; font-size: 9px;")
+        self.last_update_label.setStyleSheet("color: #888; font-size: 10px;")
         header.addWidget(self.last_update_label)
         
         header.addStretch()
@@ -57,26 +58,26 @@ class SentimentPanel(QWidget):
         self.tabs = QTabWidget()
         self.tabs.setStyleSheet("""
             QTabWidget::pane { border: 1px solid #444; background: #2d2d2d; }
-            QTabBar::tab { background: #1e1e1e; color: #fff; padding: 8px 15px; margin: 2px; border: 1px solid #444; }
+            QTabBar::tab { background: #1e1e1e; color: #fff; padding: 8px 15px; margin: 2px; border: 1px solid #444; font-size: 11px; font-weight: bold; }
             QTabBar::tab:selected { background: #0d7377; }
             QTabBar::tab:hover { background: #14919b; }
         """)
         
         # Tab 1: Market Overview
         self.market_tab = self.create_market_overview_tab()
-        self.tabs.addTab(self.market_tab, "🌍 Market Overview")
+        self.tabs.addTab(self.market_tab, "🌍 Market")
         
         # Tab 2: Coin Sentiment
         self.coin_tab = self.create_coin_sentiment_tab()
-        self.tabs.addTab(self.coin_tab, "💰 Coin Analysis")
+        self.tabs.addTab(self.coin_tab, "💰 Coin")
         
         # Tab 3: News
         self.news_tab = self.create_news_tab()
-        self.tabs.addTab(self.news_tab, "📰 Latest News")
+        self.tabs.addTab(self.news_tab, "📰 News")
         
         # Tab 4: Economic Indicators
         self.economic_tab = self.create_economic_tab()
-        self.tabs.addTab(self.economic_tab, "📊 Economic Data")
+        self.tabs.addTab(self.economic_tab, "📊 Economic")
         
         layout.addWidget(self.tabs)
         
@@ -94,23 +95,27 @@ class SentimentPanel(QWidget):
         fng_layout = QVBoxLayout(fng_frame)
         
         fng_title = QLabel("🌡️ FEAR & GREED INDEX")
-        fng_title.setFont(QFont("Arial", 11, QFont.Bold))
+        fng_title_font = QFont("Arial", 12, QFont.Bold)
+        fng_title.setFont(fng_title_font)
         fng_layout.addWidget(fng_title)
         
         self.fng_value_label = QLabel("Loading...")
-        self.fng_value_label.setFont(QFont("Arial", 24, QFont.Bold))
+        fng_value_font = QFont("Arial", 28, QFont.Bold)
+        self.fng_value_label.setFont(fng_value_font)
         self.fng_value_label.setAlignment(Qt.AlignCenter)
         fng_layout.addWidget(self.fng_value_label)
         
         self.fng_progress = QProgressBar()
         self.fng_progress.setMaximum(100)
         self.fng_progress.setStyleSheet("""
-            QProgressBar { border: 2px solid #444; border-radius: 5px; text-align: center; background: #2d2d2d; }
+            QProgressBar { border: 2px solid #444; border-radius: 5px; text-align: center; background: #2d2d2d; height: 25px; }
             QProgressBar::chunk { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #f23645, stop:0.5 #ffd700, stop:1 #26a69a); }
         """)
         fng_layout.addWidget(self.fng_progress)
         
         self.fng_interpretation = QLabel("")
+        interp_font = QFont("Arial", 11)
+        self.fng_interpretation.setFont(interp_font)
         self.fng_interpretation.setWordWrap(True)
         self.fng_interpretation.setStyleSheet("color: #ccc; padding: 5px;")
         fng_layout.addWidget(self.fng_interpretation)
@@ -123,14 +128,15 @@ class SentimentPanel(QWidget):
         stats_layout = QVBoxLayout(stats_frame)
         
         stats_title = QLabel("💰 GLOBAL CRYPTO MARKET")
-        stats_title.setFont(QFont("Arial", 11, QFont.Bold))
+        stats_title_font = QFont("Arial", 12, QFont.Bold)
+        stats_title.setFont(stats_title_font)
         stats_layout.addWidget(stats_title)
         
         self.global_stats_text = QTextEdit()
         self.global_stats_text.setReadOnly(True)
         self.global_stats_text.setMaximumHeight(150)
         self.global_stats_text.setStyleSheet("""
-            QTextEdit { background: #2d2d2d; color: #fff; border: none; font-family: 'Courier New'; font-size: 10px; }
+            QTextEdit { background: #2d2d2d; color: #fff; border: none; font-family: 'Courier New'; font-size: 11px; padding: 5px; }
         """)
         stats_layout.addWidget(self.global_stats_text)
         
@@ -142,14 +148,15 @@ class SentimentPanel(QWidget):
         trending_layout = QVBoxLayout(trending_frame)
         
         trending_title = QLabel("🔥 TRENDING COINS")
-        trending_title.setFont(QFont("Arial", 11, QFont.Bold))
+        trending_title_font = QFont("Arial", 12, QFont.Bold)
+        trending_title.setFont(trending_title_font)
         trending_layout.addWidget(trending_title)
         
         self.trending_text = QTextEdit()
         self.trending_text.setReadOnly(True)
         self.trending_text.setMaximumHeight(120)
         self.trending_text.setStyleSheet("""
-            QTextEdit { background: #2d2d2d; color: #fff; border: none; font-family: 'Courier New'; font-size: 10px; }
+            QTextEdit { background: #2d2d2d; color: #fff; border: none; font-family: 'Courier New'; font-size: 11px; padding: 5px; }
         """)
         trending_layout.addWidget(self.trending_text)
         
@@ -165,7 +172,9 @@ class SentimentPanel(QWidget):
         
         # Coin selector info
         info_label = QLabel("Select a coin from the main chart to see its sentiment analysis")
-        info_label.setStyleSheet("color: #888; font-style: italic;")
+        info_font = QFont("Arial", 11)
+        info_label.setFont(info_font)
+        info_label.setStyleSheet("color: #888; font-style: italic; padding: 10px;")
         info_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(info_label)
         
@@ -175,12 +184,14 @@ class SentimentPanel(QWidget):
         scores_layout = QVBoxLayout(scores_frame)
         
         self.coin_name_label = QLabel("Select a coin...")
-        self.coin_name_label.setFont(QFont("Arial", 14, QFont.Bold))
+        coin_name_font = QFont("Arial", 16, QFont.Bold)
+        self.coin_name_label.setFont(coin_name_font)
         self.coin_name_label.setAlignment(Qt.AlignCenter)
         scores_layout.addWidget(self.coin_name_label)
         
         self.sentiment_score_label = QLabel("")
-        self.sentiment_score_label.setFont(QFont("Arial", 18, QFont.Bold))
+        score_font = QFont("Arial", 20, QFont.Bold)
+        self.sentiment_score_label.setFont(score_font)
         self.sentiment_score_label.setAlignment(Qt.AlignCenter)
         scores_layout.addWidget(self.sentiment_score_label)
         
@@ -190,7 +201,7 @@ class SentimentPanel(QWidget):
         self.coin_details_text = QTextEdit()
         self.coin_details_text.setReadOnly(True)
         self.coin_details_text.setStyleSheet("""
-            QTextEdit { background: #2d2d2d; color: #fff; border: 1px solid #444; border-radius: 5px; font-family: 'Courier New'; font-size: 9px; padding: 5px; }
+            QTextEdit { background: #2d2d2d; color: #fff; border: 1px solid #444; border-radius: 5px; font-family: 'Courier New'; font-size: 10px; padding: 8px; }
         """)
         layout.addWidget(self.coin_details_text)
         
@@ -207,7 +218,8 @@ class SentimentPanel(QWidget):
         sentiment_layout = QVBoxLayout(sentiment_frame)
         
         self.news_sentiment_label = QLabel("📊 News Sentiment: Loading...")
-        self.news_sentiment_label.setFont(QFont("Arial", 11, QFont.Bold))
+        news_sentiment_font = QFont("Arial", 12, QFont.Bold)
+        self.news_sentiment_label.setFont(news_sentiment_font)
         sentiment_layout.addWidget(self.news_sentiment_label)
         
         layout.addWidget(sentiment_frame)
@@ -220,7 +232,7 @@ class SentimentPanel(QWidget):
         self.news_content = QTextEdit()
         self.news_content.setReadOnly(True)
         self.news_content.setStyleSheet("""
-            QTextEdit { background: #2d2d2d; color: #fff; border: none; font-family: 'Segoe UI'; font-size: 10px; padding: 10px; }
+            QTextEdit { background: #2d2d2d; color: #fff; border: none; font-family: 'Segoe UI'; font-size: 11px; padding: 10px; }
         """)
         
         scroll.setWidget(self.news_content)
@@ -240,7 +252,7 @@ class SentimentPanel(QWidget):
         self.economic_content = QTextEdit()
         self.economic_content.setReadOnly(True)
         self.economic_content.setStyleSheet("""
-            QTextEdit { background: #2d2d2d; color: #fff; border: none; font-family: 'Courier New'; font-size: 9px; padding: 10px; }
+            QTextEdit { background: #2d2d2d; color: #fff; border: none; font-family: 'Courier New'; font-size: 11px; padding: 10px; }
         """)
         
         scroll.setWidget(self.economic_content)
@@ -251,16 +263,10 @@ class SentimentPanel(QWidget):
     def load_all_data(self):
         """Load all sentiment, news, and economic data"""
         try:
-            # Market overview
             self.load_market_overview()
-            
-            # News
             self.load_news()
-            
-            # Economic indicators
             self.load_economic_data()
             
-            # Update timestamp
             from datetime import datetime
             self.last_update_label.setText(f"Last update: {datetime.now().strftime('%H:%M:%S')}")
             
@@ -270,7 +276,6 @@ class SentimentPanel(QWidget):
     def load_market_overview(self):
         """Load market overview data"""
         try:
-            # Fear & Greed Index
             fng = self.sentiment_service.get_fear_greed_index()
             value = fng.get('value', 50)
             classification = fng.get('classification', 'Neutral')
@@ -280,19 +285,17 @@ class SentimentPanel(QWidget):
             self.fng_progress.setValue(value)
             self.fng_interpretation.setText(f"{classification}\n\n{interpretation}")
             
-            # Color based on value
             if value <= 24:
-                color = "#26a69a"  # Green for extreme fear (buy opportunity)
+                color = "#26a69a"
             elif value <= 49:
-                color = "#ffd700"  # Yellow
+                color = "#ffd700"
             elif value <= 74:
-                color = "#ff9800"  # Orange
+                color = "#ff9800"
             else:
-                color = "#f23645"  # Red for extreme greed
+                color = "#f23645"
             
             self.fng_value_label.setStyleSheet(f"color: {color};")
             
-            # Global stats
             stats = self.sentiment_service.get_global_crypto_stats()
             stats_text = f"""
 Total Market Cap: ${stats.get('total_market_cap_usd', 0)/1e12:.2f}T
@@ -309,7 +312,6 @@ Markets: {stats.get('markets', 0):,}
 """
             self.global_stats_text.setText(stats_text)
             
-            # Trending coins
             trending = self.sentiment_service.get_trending_coins()
             trending_text = ""
             for i, coin in enumerate(trending[:10], 1):
@@ -326,10 +328,8 @@ Markets: {stats.get('markets', 0):,}
             news_list = self.news_service.get_latest_news(limit=10)
             sentiment = self.news_service.analyze_news_sentiment(news_list)
             
-            # Update sentiment label
             self.news_sentiment_label.setText(f"📊 News Sentiment: {sentiment['analysis']}")
             
-            # Format news
             news_text = f"""
 Bullish Signals: {sentiment['bullish_signals']} | Bearish Signals: {sentiment['bearish_signals']}
 Total News: {sentiment['total_news']}
@@ -372,7 +372,6 @@ Total News: {sentiment['total_news']}
             sentiment = self.sentiment_service.get_coin_sentiment(coin_id)
             
             if 'error' not in sentiment:
-                # Update labels
                 self.coin_name_label.setText(f"{sentiment['name']} ({sentiment['symbol']})")
                 
                 overall = sentiment.get('overall_sentiment', {})
@@ -381,7 +380,6 @@ Total News: {sentiment['total_news']}
                 
                 self.sentiment_score_label.setText(f"{classification}")
                 
-                # Color
                 if 'BULLISH' in classification:
                     color = "#26a69a"
                 elif 'BEARISH' in classification:
@@ -391,7 +389,6 @@ Total News: {sentiment['total_news']}
                 
                 self.sentiment_score_label.setStyleSheet(f"color: {color};")
                 
-                # Details
                 details = f"""
 ═══════════════════════════════════════════
 SENTIMENT ANALYSIS FOR {sentiment['name']}
@@ -454,7 +451,6 @@ SENTIMENT VOTES
         self.refresh_btn.setText("⏳ Refreshing...")
         self.load_all_data()
         
-        # Re-enable after 2 seconds
         QTimer.singleShot(2000, lambda: self.refresh_btn.setEnabled(True))
         QTimer.singleShot(2000, lambda: self.refresh_btn.setText("🔄 Refresh"))
     

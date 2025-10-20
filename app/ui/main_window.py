@@ -48,6 +48,7 @@ class MainWindow(QMainWindow):
         
         self.df = None
         self.patterns = None
+        self.recent_patterns = None   # <-- NEW: cache recent patterns
         self.current_symbol = None
         self.current_interval = None
         
@@ -151,7 +152,7 @@ class MainWindow(QMainWindow):
             print(f"Warning: Sentiment panel not loaded: {e}")
             error_widget = QWidget()
             error_layout = QVBoxLayout(error_widget)
-            error_label = QLabel(f"Sentiment panel error: {str(e)}\n\nMake sure all dependencies are installed:\npip install feedparser requests")
+            error_label = QLabel(f"Sentiment panel error: {e}\n\nMake sure all dependencies are installed:\npip install feedparser requests")
             error_label.setStyleSheet("color: #f23645; padding: 10px;")
             error_layout.addWidget(error_label)
             error_layout.addStretch()
@@ -194,16 +195,19 @@ class MainWindow(QMainWindow):
         self.cb_rsi = QCheckBox("RSI (Relative Strength)")
         self.cb_macd = QCheckBox("MACD")
         self.cb_volume = QCheckBox("Volume")
+        # NEW: toggle highlight recent
+        self.cb_recent = QCheckBox("Highlight Recent Patterns")
+        self.cb_recent.setChecked(False)  # default OFF sesuai keluhan "mengganggu"
         
         self.cb_ma.setChecked(True)
         
-        for cb in [self.cb_ma, self.cb_bollinger, self.cb_rsi, self.cb_macd, self.cb_volume]:
+        for cb in [self.cb_ma, self.cb_bollinger, self.cb_rsi, self.cb_macd, self.cb_volume, self.cb_recent]:
             cb.stateChanged.connect(self.update_chart_display)
             indicators_layout.addWidget(cb)
         
         layout.addWidget(indicators_group)
         
-        # Pattern detection - dengan scroll area
+        # Pattern detection list (tetap)
         pattern_header = QHBoxLayout()
         pattern_header.addWidget(QLabel("⚡ Detected Patterns"))
         self.pattern_count_label = QLabel("(0)")
@@ -211,37 +215,57 @@ class MainWindow(QMainWindow):
         pattern_header.addWidget(self.pattern_count_label)
         pattern_header.addStretch()
         layout.addLayout(pattern_header)
-        
-        # Scroll area untuk pattern list
+
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         scroll_area.setMaximumHeight(200)
-        
         self.pattern_list = QTableWidget()
         self.pattern_list.setColumnCount(2)
         self.pattern_list.setHorizontalHeaderLabels(["Pattern", "Count"])
         self.pattern_list.setColumnWidth(0, 250)
         self.pattern_list.setColumnWidth(1, 60)
-        self.pattern_list.setStyleSheet("""
-            QTableWidget { gridline-color: #444; border: none; }
-        """)
+        self.pattern_list.setStyleSheet("QTableWidget { gridline-color: #444; border: none; }")
         self.pattern_list.cellClicked.connect(self.show_pattern_details)
-        
         scroll_area.setWidget(self.pattern_list)
         layout.addWidget(scroll_area)
         
-        # Pattern Details Area
+        # Pattern Details
         layout.addWidget(QLabel("📋 Pattern Details (Click pattern above)"))
         self.pattern_details = QTextEdit()
         self.pattern_details.setReadOnly(True)
         self.pattern_details.setMaximumHeight(150)
         self.pattern_details.setText("Click pada pattern di tabel untuk melihat detail...")
         layout.addWidget(self.pattern_details)
-        
-        layout.addStretch()
-        
-        return widget
 
+        # Recent Patterns UI (tetap seperti versi sebelumnya)
+        sep = QFrame(); sep.setFrameShape(QFrame.HLine); sep.setStyleSheet("color: #444;")
+        layout.addWidget(sep)
+
+        header_recent = QHBoxLayout()
+        header_recent.addWidget(QLabel("⏱ Recent Patterns (1–2 Hari)"))
+        header_recent.addStretch()
+        header_recent.addWidget(QLabel("Periode:"))
+        self.recent_days_combo = QComboBox()
+        self.recent_days_combo.addItems(["1 Hari", "2 Hari"])
+        self.recent_days_combo.setMaximumWidth(100)
+        self.recent_days_combo.currentIndexChanged.connect(self.on_recent_days_changed)
+        header_recent.addWidget(self.recent_days_combo)
+        refresh_recent_btn = QPushButton("🔄 Update Recent")
+        refresh_recent_btn.setMaximumWidth(130)
+        refresh_recent_btn.clicked.connect(self.update_recent_patterns_ui)
+        header_recent.addWidget(refresh_recent_btn)
+        layout.addLayout(header_recent)
+
+        self.recent_summary = QTextEdit()
+        self.recent_summary.setReadOnly(True)
+        self.recent_summary.setMinimumHeight(140)
+        self.recent_summary.setMaximumHeight(200)
+        self.recent_summary.setText("Belum ada data recent. Klik Update atau ganti Periode.")
+        layout.addWidget(self.recent_summary)
+
+        layout.addStretch()
+        return widget
+    
     def create_stats_panel(self):
         panel = QFrame()
         panel.setMaximumHeight(100)
@@ -458,6 +482,9 @@ class MainWindow(QMainWindow):
             self.pattern_recognition = PatternRecognition(self.df)
             self.patterns = self.pattern_recognition.detect_all_patterns()
             
+            # NEW: compute recent patterns (1–2 hari, sesuai pilihan UI)
+            self.update_recent_patterns_ui()
+            
             self.update_price_info()
             self.update_pattern_list()
             self.update_stats_table()
@@ -561,7 +588,8 @@ class MainWindow(QMainWindow):
     def update_chart_display(self):
         if self.df is None or self.df.empty:
             return
-        
+        # kirim recent_patterns hanya jika toggle ON
+        recent_for_chart = self.recent_patterns if getattr(self, 'cb_recent', None) and self.cb_recent.isChecked() else None
         self.price_chart.update_chart(
             self.df,
             show_rsi=self.cb_rsi.isChecked(),
@@ -569,5 +597,42 @@ class MainWindow(QMainWindow):
             show_bollinger=self.cb_bollinger.isChecked(),
             show_ma=self.cb_ma.isChecked(),
             show_volume=self.cb_volume.isChecked(),
-            patterns=self.patterns
+            patterns=self.patterns,
+            recent_patterns=recent_for_chart
         )
+
+    # ===== NEW: helpers for recent patterns =====
+    def _get_selected_recent_days(self) -> int:
+        if not hasattr(self, 'recent_days_combo'):
+            return 1
+        text = self.recent_days_combo.currentText().strip().lower()
+        if text.startswith("2"):
+            return 2
+        return 1
+
+    def on_recent_days_changed(self):
+        # Update summary & highlights when user switches 1/2 hari
+        self.update_recent_patterns_ui()
+        self.update_chart_display()
+
+    def update_recent_patterns_ui(self):
+        """Hitung ulang recent patterns sesuai pilihan hari dan tampilkan summary."""
+        if self.df is None or self.df.empty:
+            return
+        if self.pattern_recognition is None:
+            self.pattern_recognition = PatternRecognition(self.df)
+        else:
+            # pastikan referensi df ter-update
+            self.pattern_recognition.df = self.df
+
+        days = self._get_selected_recent_days()
+        try:
+            self.recent_patterns = self.pattern_recognition.get_recent_patterns(days=days)
+            summary_text = self.pattern_recognition.get_recent_patterns_summary(days=days)
+        except Exception as e:
+            self.recent_patterns = {}
+            summary_text = f"Terjadi error saat menghitung recent patterns: {e}"
+
+        if hasattr(self, 'recent_summary') and self.recent_summary is not None:
+            self.recent_summary.setText(summary_text)
+    # ===== END NEW =====
