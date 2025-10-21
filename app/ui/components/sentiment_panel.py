@@ -7,35 +7,31 @@ from PyQt5.QtGui import QFont, QColor
 from ...services.sentiment_analysis import SentimentAnalysisService
 from ...services.news_service import NewsService
 from ...services.economic_indicators import EconomicIndicatorsService
-
+from ...services.alpha_signals import AlphaSignalsService   # 🔥 NEW
+from ...services.alpha_signals import AlphaSignalsService
+ 
 class SentimentPanel(QWidget):
-    """Panel sentiment, news, economic + Alpha Candidates (public predictive signals, non-insider)."""
+    """Panel untuk menampilkan sentiment, news, economic analysis + Alpha/Rumor Radar (publik & derivatif)"""
     
     refresh_requested = pyqtSignal()
     
     def __init__(self):
         super().__init__()
+        self.alpha_service = AlphaSignalsService()  # sudah default baca COINGLASS_API_KEY atau key bawaan
         self.sentiment_service = SentimentAnalysisService()
         self.news_service = NewsService()
         self.economic_service = EconomicIndicatorsService()
-
-        # Optional service khusus alpha signals (buat sendiri; lihat metode yg dipakai di bawah)
-        self.alpha_service = None
-        try:
-            from ...services.alpha_signals import AlphaSignalsService  # optional
-            self.alpha_service = AlphaSignalsService()
-        except Exception:
-            self.alpha_service = None
+        self.alpha_service = AlphaSignalsService()          # 🔥 NEW
         
         self.current_symbol = None
         self._last_coin_news_sentiment = None  # cache ringan
         
         self.init_ui()
         
-        # Auto refresh timer (3 menit)
+        # Auto refresh timer (setiap 3 menit)
         self.refresh_timer = QTimer()
         self.refresh_timer.timeout.connect(self.auto_refresh)
-        self.refresh_timer.start(180000)
+        self.refresh_timer.start(180000)  # 3 menit
     
     # ---------- UI ----------
     def init_ui(self):
@@ -90,7 +86,7 @@ class SentimentPanel(QWidget):
         self.economic_tab = self.create_economic_tab()
         self.tabs.addTab(self.economic_tab, "📊 Economic")
 
-        # Tab 5: Alpha Candidates (publik predictive signals)
+        # Tab 5: Alpha/Radar
         self.alpha_tab = self.create_alpha_radar_tab()
         self.tabs.addTab(self.alpha_tab, "🧭 Alpha Radar")
         
@@ -98,15 +94,13 @@ class SentimentPanel(QWidget):
         
         # Initial load
         self.load_all_data()
-        # Isi alpha candidates global biar tidak kosong
-        self.populate_alpha_candidates_global()
     
     # ---------- Tabs ----------
     def create_market_overview_tab(self) -> QWidget:
         widget = QWidget()
         layout = QVBoxLayout(widget)
         
-        # Fear & Greed Index
+        # Fear & Greed
         fng_frame = QFrame()
         fng_frame.setStyleSheet("background: #1e1e1e; border: 1px solid #444; border-radius: 5px; padding: 10px;")
         fng_layout = QVBoxLayout(fng_frame)
@@ -141,9 +135,9 @@ class SentimentPanel(QWidget):
         stats_frame.setStyleSheet("background: #1e1e1e; border: 1px solid #444; border-radius: 5px; padding: 10px;")
         stats_layout = QVBoxLayout(stats_frame)
         
-        stats_title = QLabel("💰 GLOBAL CRYPTO MARKET")
-        stats_title.setFont(QFont("Arial", 12, QFont.Bold))
-        stats_layout.addWidget(stats_title)
+        st = QLabel("💰 GLOBAL CRYPTO MARKET")
+        st.setFont(QFont("Arial", 12, QFont.Bold))
+        stats_layout.addWidget(st)
         
         self.global_stats_text = QTextEdit()
         self.global_stats_text.setReadOnly(True)
@@ -155,14 +149,14 @@ class SentimentPanel(QWidget):
         
         layout.addWidget(stats_frame)
         
-        # Trending Coins
+        # Trending
         trending_frame = QFrame()
         trending_frame.setStyleSheet("background: #1e1e1e; border: 1px solid #444; border-radius: 5px; padding: 10px;")
-        trending_layout = QVBoxLayout(trending_frame)
+        tL = QVBoxLayout(trending_frame)
         
-        trending_title = QLabel("🔥 TRENDING COINS")
-        trending_title.setFont(QFont("Arial", 12, QFont.Bold))
-        trending_layout.addWidget(trending_title)
+        lt = QLabel("🔥 TRENDING COINS")
+        lt.setFont(QFont("Arial", 12, QFont.Bold))
+        tL.addWidget(lt)
         
         self.trending_text = QTextEdit()
         self.trending_text.setReadOnly(True)
@@ -170,156 +164,103 @@ class SentimentPanel(QWidget):
         self.trending_text.setStyleSheet("""
             QTextEdit { background: #2d2d2d; color: #fff; border: none; font-family: 'Courier New'; font-size: 11px; padding: 5px; }
         """)
-        trending_layout.addWidget(self.trending_text)
+        tL.addWidget(self.trending_text)
         
         layout.addWidget(trending_frame)
         layout.addStretch()
-        
         return widget
     
     def create_coin_sentiment_tab(self) -> QWidget:
-        widget = QWidget()
-        layout = QVBoxLayout(widget)
+        widget = QWidget(); layout = QVBoxLayout(widget)
+        info = QLabel("Select a coin from the main chart to see its sentiment analysis")
+        info.setFont(QFont("Arial", 11)); info.setStyleSheet("color: #888; font-style: italic; padding: 10px;")
+        info.setAlignment(Qt.AlignCenter); layout.addWidget(info)
         
-        info_label = QLabel("Select a coin from the main chart to see its sentiment analysis")
-        info_label.setFont(QFont("Arial", 11))
-        info_label.setStyleSheet("color: #888; font-style: italic; padding: 10px;")
-        info_label.setAlignment(Qt.AlignCenter)
-        layout.addWidget(info_label)
-        
-        scores_frame = QFrame()
-        scores_frame.setStyleSheet("background: #1e1e1e; border: 1px solid #444; border-radius: 5px; padding: 10px;")
-        scores_layout = QVBoxLayout(scores_frame)
-        
-        self.coin_name_label = QLabel("Select a coin...")
-        self.coin_name_label.setFont(QFont("Arial", 16, QFont.Bold))
-        self.coin_name_label.setAlignment(Qt.AlignCenter)
-        scores_layout.addWidget(self.coin_name_label)
-        
-        self.sentiment_score_label = QLabel("")
-        self.sentiment_score_label.setFont(QFont("Arial", 20, QFont.Bold))
-        self.sentiment_score_label.setAlignment(Qt.AlignCenter)
-        scores_layout.addWidget(self.sentiment_score_label)
-        
+        scores_frame = QFrame(); scores_frame.setStyleSheet("background: #1e1e1e; border: 1px solid #444; border-radius: 5px; padding: 10px;")
+        sL = QVBoxLayout(scores_frame)
+        self.coin_name_label = QLabel("Select a coin..."); self.coin_name_label.setFont(QFont("Arial", 16, QFont.Bold)); self.coin_name_label.setAlignment(Qt.AlignCenter); sL.addWidget(self.coin_name_label)
+        self.sentiment_score_label = QLabel(""); self.sentiment_score_label.setFont(QFont("Arial", 20, QFont.Bold)); self.sentiment_score_label.setAlignment(Qt.AlignCenter); sL.addWidget(self.sentiment_score_label)
         layout.addWidget(scores_frame)
         
-        self.coin_details_text = QTextEdit()
-        self.coin_details_text.setReadOnly(True)
-        self.coin_details_text.setStyleSheet("""
-            QTextEdit { background: #2d2d2d; color: #fff; border: 1px solid #444; border-radius: 5px; font-family: 'Courier New'; font-size: 10px; padding: 8px; }
-        """)
+        self.coin_details_text = QTextEdit(); self.coin_details_text.setReadOnly(True)
+        self.coin_details_text.setStyleSheet("QTextEdit { background: #2d2d2d; color: #fff; border: 1px solid #444; border-radius: 5px; font-family: 'Courier New'; font-size: 10px; padding: 8px; }")
         layout.addWidget(self.coin_details_text)
-        
         return widget
     
     def create_news_tab(self) -> QWidget:
-        widget = QWidget()
-        layout = QVBoxLayout(widget)
-        
-        sentiment_frame = QFrame()
-        sentiment_frame.setStyleSheet("background: #1e1e1e; border: 1px solid #444; border-radius: 5px; padding: 10px;")
-        sentiment_layout = QVBoxLayout(sentiment_frame)
-        
-        self.news_sentiment_label = QLabel("📊 News Sentiment: Loading...")
-        self.news_sentiment_label.setFont(QFont("Arial", 12, QFont.Bold))
-        sentiment_layout.addWidget(self.news_sentiment_label)
-        
+        widget = QWidget(); layout = QVBoxLayout(widget)
+        sentiment_frame = QFrame(); sentiment_frame.setStyleSheet("background: #1e1e1e; border: 1px solid #444; border-radius: 5px; padding: 10px;")
+        sL = QVBoxLayout(sentiment_frame)
+        self.news_sentiment_label = QLabel("📊 News Sentiment: Loading..."); self.news_sentiment_label.setFont(QFont("Arial", 12, QFont.Bold)); sL.addWidget(self.news_sentiment_label)
         layout.addWidget(sentiment_frame)
-        
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setStyleSheet("border: none;")
-        
-        self.news_content = QTextEdit()
-        self.news_content.setReadOnly(True)
-        self.news_content.setStyleSheet("""
-            QTextEdit { background: #2d2d2d; color: #fff; border: none; font-family: 'Segoe UI'; font-size: 11px; padding: 10px; }
-        """)
-        
-        scroll.setWidget(self.news_content)
-        layout.addWidget(scroll)
-        
+        scroll = QScrollArea(); scroll.setWidgetResizable(True); scroll.setStyleSheet("border: none;")
+        self.news_content = QTextEdit(); self.news_content.setReadOnly(True)
+        self.news_content.setStyleSheet("QTextEdit { background: #2d2d2d; color: #fff; border: none; font-family: 'Segoe UI'; font-size: 11px; padding: 10px; }")
+        scroll.setWidget(self.news_content); layout.addWidget(scroll)
         return widget
     
     def create_economic_tab(self) -> QWidget:
-        widget = QWidget()
-        layout = QVBoxLayout(widget)
-        
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setStyleSheet("border: none;")
-        
-        self.economic_content = QTextEdit()
-        self.economic_content.setReadOnly(True)
-        self.economic_content.setStyleSheet("""
-            QTextEdit { background: #2d2d2d; color: #fff; border: none; font-family: 'Courier New'; font-size: 11px; padding: 10px; }
-        """)
-        
-        scroll.setWidget(self.economic_content)
-        layout.addWidget(scroll)
-        
+        widget = QWidget(); layout = QVBoxLayout(widget)
+        scroll = QScrollArea(); scroll.setWidgetResizable(True); scroll.setStyleSheet("border: none;")
+        self.economic_content = QTextEdit(); self.economic_content.setReadOnly(True)
+        self.economic_content.setStyleSheet("QTextEdit { background: #2d2d2d; color: #fff; border: none; font-family: 'Courier New'; font-size: 11px; padding: 10px; }")
+        scroll.setWidget(self.economic_content); layout.addWidget(scroll)
         return widget
 
     def create_alpha_radar_tab(self) -> QWidget:
-        """Alpha Radar: menilai kandidat koin via public predictive signals (non-insider)."""
         widget = QWidget()
         layout = QVBoxLayout(widget)
 
-        # Composite score (global/per-coin akan di-set oleh populate_*)
+    # Composite score bar
         score_box = QFrame()
         score_box.setStyleSheet("background:#1e1e1e;border:1px solid #444;border-radius:5px;padding:10px;")
         sL = QVBoxLayout(score_box)
-        title = QLabel("🧭 Composite Sentiment (0–100) — public predictive signals")
+        title = QLabel("🧭 Alpha Signals (Derivatives & Smart-Money) — CoinGlass/Binance")
         title.setFont(QFont("Arial", 12, QFont.Bold))
         sL.addWidget(title)
 
         self.comp_score_bar = QProgressBar()
         self.comp_score_bar.setMaximum(100)
         self.comp_score_bar.setStyleSheet("""
-            QProgressBar{border:2px solid #444;border-radius:5px;text-align:center;background:#2d2d2d;height:25px;}
-            QProgressBar::chunk{background:#00b894;}
+        QProgressBar{border:2px solid #444;border-radius:5px;text-align:center;background:#2d2d2d;height:24px;}
+        QProgressBar::chunk{background:#00b894;}
         """)
         sL.addWidget(self.comp_score_bar)
 
-        self.comp_score_label = QLabel("—")
+        self.comp_score_label = QLabel("NEUTRAL — 50/100")
         self.comp_score_label.setAlignment(Qt.AlignCenter)
         self.comp_score_label.setStyleSheet("color:#ccc;padding:4px;")
         sL.addWidget(self.comp_score_label)
         layout.addWidget(score_box)
 
-        # Alpha Candidates (Ranked)
-        cand_box = QFrame()
-        cand_box.setStyleSheet("background:#1e1e1e;border:1px solid #444;border-radius:5px;padding:10px;")
-        cL = QVBoxLayout(cand_box)
-        t2 = QLabel("🏁 Top Alpha Candidates — Ranked (non-insider)")
+    # Smart-Money box
+        sm_box = QFrame()
+        sm_box.setStyleSheet("background:#1e1e1e;border:1px solid #444;border-radius:5px;padding:10px;")
+        smL = QVBoxLayout(sm_box)
+        t2 = QLabel("⚡ Smart-Money Flow (24h)")
         t2.setFont(QFont("Arial", 12, QFont.Bold))
-        cL.addWidget(t2)
-        self.alpha_candidates_text = QTextEdit()
-        self.alpha_candidates_text.setReadOnly(True)
-        self.alpha_candidates_text.setStyleSheet("QTextEdit{background:#2d2d2d;color:#fff;border:none;font-family:'Courier New';font-size:11px;padding:8px;}")
-        cL.addWidget(self.alpha_candidates_text)
-        layout.addWidget(cand_box)
+        smL.addWidget(t2)
+        self.smart_money_label = QLabel("—")
+        self.smart_money_label.setStyleSheet("color:#ffd700;padding:4px;")
+        smL.addWidget(self.smart_money_label)
+        layout.addWidget(sm_box)
 
-        # Signals Breakdown
-        brk_box = QFrame()
-        brk_box.setStyleSheet("background:#1e1e1e;border:1px solid #444;border-radius:5px;padding:10px;")
-        bL = QVBoxLayout(brk_box)
-        t3 = QLabel("🔎 Signals Breakdown (SmartMoney, Listings, On-chain, Derivatives, Social/Dev)")
+    # Detail area (insight + headlines publik)
+        feed_box = QFrame()
+        feed_box.setStyleSheet("background:#1e1e1e;border:1px solid #444;border-radius:5px;padding:10px;")
+        fL = QVBoxLayout(feed_box)
+        t3 = QLabel("📝 Smart-Money & Derivatives Detail")
         t3.setFont(QFont("Arial", 12, QFont.Bold))
-        bL.addWidget(t3)
-        self.alpha_breakdown_text = QTextEdit()
-        self.alpha_breakdown_text.setReadOnly(True)
-        self.alpha_breakdown_text.setStyleSheet("QTextEdit{background:#2d2d2d;color:#fff;border:none;font-family:'Courier New';font-size:11px;padding:8px;}")
-        bL.addWidget(self.alpha_breakdown_text)
-        layout.addWidget(brk_box)
-
-        # Disclaimer
-        disclaimer = QLabel("Catatan: Radar ini memakai sumber publik tepercaya (non-insider). BUKAN ajakan membeli / bukan jaminan keuntungan.")
-        disclaimer.setStyleSheet("color:#888;font-size:10px;")
-        layout.addWidget(disclaimer)
+        fL.addWidget(t3)
+        self.alpha_text = QTextEdit()
+        self.alpha_text.setReadOnly(True)
+        self.alpha_text.setStyleSheet("QTextEdit{background:#2d2d2d;color:#fff;border:none;font-family:'Courier New';font-size:11px;padding:8px;}")
+        fL.addWidget(self.alpha_text)
+        layout.addWidget(feed_box)
 
         layout.addStretch()
         return widget
+
     
     # ---------- Loaders ----------
     def load_all_data(self):
@@ -362,7 +303,7 @@ ETH Dominance: {stats.get('ethereum_dominance', 0):.2f}%
 
 Active Cryptos: {stats.get('active_cryptocurrencies', 0):,}
 Markets: {stats.get('markets', 0):,}
-""".strip()
+"""
             self.global_stats_text.setText(stats_text)
             
             trending = self.sentiment_service.get_trending_coins()
@@ -371,7 +312,6 @@ Markets: {stats.get('markets', 0):,}
                 sym = (coin.get('symbol') or '').upper()
                 trending_text += f"{i}. {coin.get('name','?')} ({sym}) - Rank #{coin.get('rank','?')}\n"
             self.trending_text.setText(trending_text if trending_text else "No trending data available")
-            
         except Exception as e:
             print(f"Error loading market overview: {e}")
     
@@ -380,18 +320,19 @@ Markets: {stats.get('markets', 0):,}
             news_list = self.news_service.get_latest_news(limit=12)
             sentiment = self.news_service.analyze_news_sentiment(news_list)
             self.news_sentiment_label.setText(f"📊 News Sentiment: {sentiment['analysis']} (Score {sentiment['score']}/100)")
-            
-            news_text = f"""Bullish Signals: {sentiment['bullish_signals']} | Bearish Signals: {sentiment['bearish_signals']}
+            news_text = f"""
+Bullish Signals: {sentiment['bullish_signals']} | Bearish Signals: {sentiment['bearish_signals']}
 Total News: {sentiment['total_news']}
-{'='*60}"""
+{'='*60}
+"""
             for i, news in enumerate(news_list, 1):
                 news_text += f"""
-
 [{i}] {news['title']}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📌 {news['source']} | ⏰ {news['time_ago']}
 {news['summary']}
-🔗 {news['link']}"""
+🔗 {news['link']}
+"""
             self.news_content.setText(news_text.strip())
         except Exception as e:
             print(f"Error loading news: {e}")
@@ -404,197 +345,44 @@ Total News: {sentiment['total_news']}
         except Exception as e:
             print(f"Error loading economic data: {e}")
             self.economic_content.setText("Error loading economic data. Please try again.")
-
-    # ---------- Alpha Radar: helpers ----------
-    def _safe(self, fn, *args, **kwargs):
-        try:
-            return fn(*args, **kwargs)
-        except Exception as e:
-            print(f"Alpha helper error: {e}")
-            return None
-
-    def _score_components(self, comp):
-        """Clamp & sum komponen menjadi total 0–100."""
-        def c(x, lo=0, hi=100): 
-            try: return max(lo, min(hi, float(x)))
-            except: return 0.0
-        weights = {'smart': 40, 'listings': 25, 'onchain': 20, 'derivs': 10, 'socialdev': 5}
-        total = (
-            c(comp.get('smart', 0))/100*weights['smart'] +
-            c(comp.get('listings', 0))/100*weights['listings'] +
-            c(comp.get('onchain', 0))/100*weights['onchain'] +
-            c(comp.get('derivs', 0))/100*weights['derivs'] +
-            c(comp.get('socialdev', 0))/100*weights['socialdev']
-        )
-        return round(total, 1)
-
-    def _rank_candidates(self, raw_candidates):
-        """raw_candidates: list of dict {'symbol','name','components':{...},'notes':[],'sources':[]}"""
-        ranked = []
-        for r in raw_candidates:
-            comps = r.get('components', {})
-            score = self._score_components(comps)
-            r['score'] = score
-            ranked.append(r)
-        ranked.sort(key=lambda x: x.get('score', 0), reverse=True)
-        return ranked
-
-    # ---------- Alpha Radar: Global (default) ----------
-    def populate_alpha_candidates_global(self):
-        """
-        Buat shortlist kandidat GLOBAL dari public predictive signals.
-        Menggunakan AlphaSignalsService jika ada; jika tidak, fallback sederhana.
-        """
-        try:
-            candidates = []
-
-            if self.alpha_service:
-                # ====== Sinyal utama dari service khusus (disarankan dibuat) ======
-                # Harap sediakan metode-metode berikut di AlphaSignalsService (semua optional):
-                # - get_upcoming_listings(limit=50) -> [{'symbol','name','exchange','date','confidence(0-100)'}]
-                # - get_smart_money_flows(limit=200) -> [{'symbol','side','size_usd','score(0-100)','source'}]
-                # - get_onchain_strength(symbols:list) -> {symbol:{'netflows','active_addrs','dev','score(0-100)'}}
-                # - get_derivatives_positioning(symbols:list) -> {symbol:{'funding','oi_change','long_short','score(0-100)'}}
-                # - get_social_dev_momentum(symbols:list) -> {symbol:{'social','dev','score(0-100)'}}
-                listings = self._safe(self.alpha_service.get_upcoming_listings, 50) or []
-                smartflows = self._safe(self.alpha_service.get_smart_money_flows, 200) or []
-                # Ambil kandidat awal dari listings & smartmoney
-                base_syms = set([x.get('symbol','').upper() for x in listings if x.get('symbol')] +
-                                [x.get('symbol','').upper() for x in smartflows if x.get('symbol')])
-
-                # Ambil metrik tambahan untuk scoring
-                onchain = self._safe(self.alpha_service.get_onchain_strength, list(base_syms)) or {}
-                derivs  = self._safe(self.alpha_service.get_derivatives_positioning, list(base_syms)) or {}
-                socdev  = self._safe(self.alpha_service.get_social_dev_momentum, list(base_syms)) or {}
-
-                for sym in base_syms:
-                    comps = {
-                        'smart': max([f.get('score', 0) for f in smartflows if f.get('symbol','').upper()==sym] or [0]),
-                        'listings': max([l.get('confidence', 0) for l in listings if l.get('symbol','').upper()==sym] or [0]),
-                        'onchain': (onchain.get(sym, {}) or {}).get('score', 0),
-                        'derivs':  (derivs.get(sym,  {}) or {}).get('score', 0),
-                        'socialdev': (socdev.get(sym, {}) or {}).get('score', 0),
-                    }
-                    notes = []
-                    if comps['listings']>0:
-                        exs = [l.get('exchange') for l in listings if l.get('symbol','').upper()==sym and l.get('exchange')]
-                        if exs: notes.append(f"Upcoming listing: {', '.join(sorted(set(exs)))}")
-                    if comps['smart']>0:
-                        notes.append("Smart-money inflow detected")
-                    if (onchain.get(sym) or {}).get('netflows') is not None:
-                        nf = onchain[sym]['netflows']
-                        notes.append(f"Netflows: {nf:+.2f}")
-                    name = (onchain.get(sym) or {}).get('name') or sym
-                    sources = []
-                    for l in listings:
-                        if l.get('symbol','').upper()==sym and l.get('exchange'):
-                            sources.append(f"Listing:{l.get('exchange')}")
-                    for f in smartflows:
-                        if f.get('symbol','').upper()==sym and f.get('source'):
-                            sources.append(f"Smart:{f.get('source')}")
-                    candidates.append({
-                        'symbol': sym, 'name': name,
-                        'components': comps, 'notes': notes, 'sources': sorted(set(sources))
-                    })
-            else:
-                # ====== Fallback publik sederhana (tetap non-insider) ======
-                # Pakai trending + likuiditas + FNG agar tidak kosong
-                trending = self._safe(self.sentiment_service.get_trending_coins) or []
-                fng = self._safe(self.sentiment_service.get_fear_greed_index) or {'value':50}
-                base = trending[:8]
-                for c in base:
-                    sym = (c.get('symbol') or '').upper()
-                    name = c.get('name') or sym
-                    rank = float(c.get('rank') or 9999)
-                    # proxy scoring kasar
-                    comps = {
-                        'smart': max(0, 100 - min(rank, 100)),    # rank kecil → proxy institutional interest
-                        'listings': 0,
-                        'onchain': 50,
-                        'derivs': 50,
-                        'socialdev': 50,
-                    }
-                    notes = [f"Trending proxy; rank #{int(rank) if rank!=9999 else '?'}",
-                             f"Macro FNG={fng.get('value',50)}"]
-                    candidates.append({'symbol': sym, 'name': name, 'components': comps, 'notes': notes, 'sources': ['Public:Trending']})
-
-            ranked = self._rank_candidates(candidates)[:10]
-
-            # Composite global (pakai rata-rata top 5)
-            if ranked:
-                avg = sum([x['score'] for x in ranked[:5]])/min(5, len(ranked))
-                self.comp_score_bar.setValue(int(round(avg)))
-                self.comp_score_label.setText(f"Global Composite (Top-5 Avg) — {avg:.1f}/100")
-            else:
-                self.comp_score_bar.setValue(50)
-                self.comp_score_label.setText("Global Composite — 50/100")
-
-            # Render Top Candidates
-            txt = "TOP ALPHA CANDIDATES (GLOBAL)\n" + "─"*60 + "\n"
-            if ranked:
-                for i, r in enumerate(ranked, 1):
-                    notes = "; ".join(r.get('notes', [])[:3])
-                    srcs  = ", ".join(r.get('sources', [])[:4])
-                    txt += f"{i:>2}. {r['symbol']:<8}  {r['score']:>5.1f}  — {r.get('name','')}\n"
-                    if notes: txt += f"    • {notes}\n"
-                    if srcs:  txt += f"    • Sources: {srcs}\n"
-            else:
-                txt += "—\n"
-            self.alpha_candidates_text.setText(txt)
-
-            # Render Breakdown
-            br = "SIGNALS BREAKDOWN\n" + "─"*60 + "\n"
-            if ranked:
-                for r in ranked[:8]:
-                    c = r['components']
-                    br += (f"{r['symbol']}:  smart={c.get('smart',0):.0f}  listings={c.get('listings',0):.0f}  "
-                           f"onchain={c.get('onchain',0):.0f}  derivs={c.get('derivs',0):.0f}  social/dev={c.get('socialdev',0):.0f}  "
-                           f"→ score {r['score']:.1f}\n")
-            else:
-                br += "—\n"
-            self.alpha_breakdown_text.setText(br)
-
-        except Exception as e:
-            print(f"populate_alpha_candidates_global error: {e}")
-            self.alpha_candidates_text.setText("Alpha Candidates global tidak tersedia saat ini.")
-            self.alpha_breakdown_text.setText("—")
-
-    # ---------- Per-coin update + Alpha (still available) ----------
+    
+    # ---------- Per-coin update + Alpha Radar ----------
     def update_coin_sentiment(self, symbol: str):
-        """Update coin-specific sentiment + refresh Alpha (per-coin composite + global list tetap ada)."""
+        """Update coin-specific sentiment & isi Alpha Radar (derivatives)"""
         self.current_symbol = symbol
         try:
+            # ----- Sentiment (CoinGecko) -----
             coin_id = self.sentiment_service.convert_symbol_to_coingecko_id(symbol)
             sentiment = self.sentiment_service.get_coin_sentiment(coin_id)
-            
-            if 'error' not in sentiment:
+            if 'error' in sentiment:
+                self.coin_name_label.setText(f"{symbol} - Data Not Available")
+                self.sentiment_score_label.setText("")
+                self.coin_details_text.setText("Unable to fetch sentiment data for this coin.")
+            else:
                 self.coin_name_label.setText(f"{sentiment['name']} ({sentiment['symbol']})")
                 overall = sentiment.get('overall_sentiment', {})
-                classification = overall.get('classification', 'Unknown')
+                cls = overall.get('classification', 'Unknown')
                 score = overall.get('score', 0)
-                
-                self.sentiment_score_label.setText(f"{classification}")
-                if 'BULLISH' in classification: color = "#26a69a"
-                elif 'BEARISH' in classification: color = "#f23645"
+                self.sentiment_score_label.setText(f"{cls}")
+                if 'BULLISH' in cls: color = "#26a69a"
+                elif 'BEARISH' in cls: color = "#f23645"
                 else: color = "#ffd700"
                 self.sentiment_score_label.setStyleSheet(f"color: {color};")
-                
                 details = f"""
 ═══════════════════════════════════════════
 SENTIMENT ANALYSIS FOR {sentiment['name']}
 ═══════════════════════════════════════════
 
 Overall Score: {score}/10
-Classification: {classification}
+Classification: {cls}
 
 Reasons:
-""".strip()
+"""
                 for reason in overall.get('reasons', []):
-                    details += f"\n  • {reason}"
-                
+                    details += f"  • {reason}\n"
                 details += f"""
 
-\nMARKET DATA
+MARKET DATA
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Market Cap Rank: #{sentiment.get('market_cap_rank', 'N/A')}
 Market Cap: ${sentiment.get('market_cap', 0)/1e9:.2f}B
@@ -626,57 +414,91 @@ SENTIMENT VOTES
 """.strip()
                 self.coin_details_text.setText(details)
 
-                # Per-coin composite (pakai berita spesifik hanya sebagai pelengkap, bukan penentu)
-                try:
-                    coin_news = self.news_service.get_coin_specific_news(sentiment['name'], limit=6)
-                    coin_news_sent = self.news_service.analyze_news_sentiment(coin_news) if coin_news is not None else None
-                    self._last_coin_news_sentiment = coin_news_sent
-                except Exception:
-                    coin_news_sent = None
+            # ----- Alpha Signals (CoinGlass) -----
+            base_symbol = symbol.split("/")[0] if "/" in symbol else symbol
+            alpha = self.alpha_service.get_alpha_for_symbol(base_symbol)
+            self.comp_score_bar.setValue(alpha["score"])
+            self.comp_score_label.setText(f"{alpha['label']} — {alpha['score']}/100")
 
-                # Hitung composite ringkas untuk bar atas (opsional)
-                fng = self.sentiment_service.get_fear_greed_index()
-                pseudo = {'overall_sentiment': {'score': (score or 0)*10}}  # skala 0-100
-                if hasattr(self.sentiment_service, 'compute_composite_score'):
-                    comp = self.sentiment_service.compute_composite_score(pseudo, fng, coin_news_sent or {'score':50})
-                    self.comp_score_bar.setValue(comp['score'])
-                    self.comp_score_label.setText(
-                        f"{comp['label']} — {comp['score']}/100  "
-                        f"(coin:{comp['components']['coin']:.0f}, news:{comp['components']['news']:.0f}, invFNG:{comp['components']['fear_greed_inverted']:.0f})"
-                    )
-                else:
-                    self.comp_score_bar.setValue(int((score or 5) * 10))
-                    self.comp_score_label.setText(f"Composite ~ {(score or 5)*10:.0f}/100")
+            # Build readable details
+            m = alpha["metrics"]
+            fr = m.get("funding_rate_8h")
+            fr_txt = f"{fr*100:.3f}%" if isinstance(fr, (int,float)) else "—"
+            oi_txt = f"{(m.get('oi_change_24h_pct') or 0):+.2f}%"
+            oi_lvl = m.get("oi_level")
+            oi_lvl_txt = f"${oi_lvl/1e9:.2f}B" if (isinstance(oi_lvl,(int,float)) and oi_lvl>0) else "—"
+            ls_acc = m.get("ls_accounts")
+            ls_pos = m.get("ls_positions")
+            liq_l = m.get("liq_24h_long_usd") or 0
+            liq_s = m.get("liq_24h_short_usd") or 0
 
-                # Tetap update global alpha candidates (list ranking)
-                self.populate_alpha_candidates_global()
+            txt = "DERIVATIVES SNAPSHOT\n" + "─"*60 + "\n"
+            txt += f"Funding (8h): {fr_txt}  [{alpha['metrics'].get('funding_bias','neutral')}]\n"
+            txt += f"Open Interest: {oi_lvl_txt}  (Δ24h {oi_txt})\n"
+            txt += f"Long/Short Ratio — Accounts: {ls_acc:.2f} | Positions: {ls_pos:.2f}\n" if (ls_acc or ls_pos) else "Long/Short Ratio: —\n"
+            txt += f"Liquidations 24h — Long: ${liq_l:,.0f} | Short: ${liq_s:,.0f}\n"
+            txt += "\nINSIGHTS\n" + "─"*60 + "\n"
+            for r in alpha["insights"]:
+                txt += f"• {r}\n"
+            self.alpha_text.setText(txt.strip())
 
-            else:
-                self.coin_name_label.setText(f"{symbol} - Data Not Available")
-                self.sentiment_score_label.setText("")
-                self.coin_details_text.setText("Unable to fetch sentiment data for this coin.")
-                self.populate_alpha_candidates_global()
-                
         except Exception as e:
             print(f"Error updating coin sentiment: {e}")
             self.coin_details_text.setText(f"Error: {str(e)}")
-            self.populate_alpha_candidates_global()
-    
+            self.alpha_text.setText("—")
+            # === ALPHA SIGNALS (CoinGlass/Binance) + SMART-MONEY ===
+        try:
+            alpha = self.alpha_service.get_alpha_for_symbol(symbol)
+    # bar & label
+            self.comp_score_bar.setValue(alpha['score'])
+            self.comp_score_label.setText(f"{alpha['label']} — {alpha['score']}/100")
+
+            sm = alpha.get('smart_money', {})
+            sm_label = sm.get('label', 'NEUTRAL')
+            sm_score = sm.get('score', 50)
+            dls = sm.get('delta_long_share_pp')
+            sm_desc = f"Smart-Money Flow: {sm_label} ({sm_score}/100)"
+            if dls is not None:
+                arrow = '↑' if dls>=0 else '↓'
+                sm_desc += f" — Top Trader Long Share {arrow}{abs(dls):.1f} pp/24h"
+            self.smart_money_label.setText(sm_desc)
+
+    # detail text
+            m = alpha['metrics']
+            details_alpha = []
+            details_alpha.append("DERIVATIVES SNAPSHOT")
+            details_alpha.append("—"*60)
+            fr = m.get('funding_rate_8h')
+            fr_txt = f"{fr:+.4%}" if (fr is not None) else "—"
+            details_alpha.append(f"Funding (8h): {fr_txt}")
+            oi_chg = m.get('oi_change_24h_pct')
+            oi_txt = f"{oi_chg:+.2f}%" if oi_chg is not None else "—"
+            details_alpha.append(f"Open Interest 24h: {oi_txt}")
+            ls_acc = m.get('ls_accounts'); ls_pos = m.get('ls_positions')
+            details_alpha.append(f"Long/Short Ratio (acc/pos): {ls_acc or '—'} / {ls_pos or '—'}")
+            L = m.get('liq_24h_long_usd') or 0; S = m.get('liq_24h_short_usd') or 0
+            details_alpha.append(f"Liquidations 24h — Long: ${L:,.0f} | Short: ${S:,.0f}")
+            details_alpha.append("")
+            details_alpha.append("INSIGHTS")
+            details_alpha.append("—"*60)
+            for r in alpha.get('insights', []):
+                details_alpha.append(f"* {r}")
+            details_alpha.append("")
+            details_alpha.append("SMART-MONEY NOTES")
+            for r in sm.get('reasons', []):
+                details_alpha.append(f"* {r}")
+
+            self.alpha_text.setText("\n".join(details_alpha))
+        except Exception as _e:
+    # jangan blok UI jika gagal
+            pass
+
     # ---------- Refresh ----------
     def manual_refresh(self):
-        self.refresh_btn.setEnabled(False)
-        self.refresh_btn.setText("⏳ Refreshing...")
+        self.refresh_btn.setEnabled(False); self.refresh_btn.setText("⏳ Refreshing...")
         self.load_all_data()
-        if self.current_symbol:
-            self.update_coin_sentiment(self.current_symbol)
-        else:
-            self.populate_alpha_candidates_global()
-        QTimer.singleShot(2000, lambda: self.refresh_btn.setEnabled(True))
-        QTimer.singleShot(2000, lambda: self.refresh_btn.setText("🔄 Refresh"))
+        QTimer.singleShot(1200, lambda: self.refresh_btn.setEnabled(True))
+        QTimer.singleShot(1200, lambda: self.refresh_btn.setText("🔄 Refresh"))
     
     def auto_refresh(self):
         self.load_all_data()
-        if self.current_symbol:
-            self.update_coin_sentiment(self.current_symbol)
-        else:
-            self.populate_alpha_candidates_global()
